@@ -74,6 +74,7 @@
 				"use strict";
 
 				heatmap.setData([]);
+				points.clear();
 
 				var numNodes = origPoints.getLength();
 				var isFlag = property.substr(0, 5) == "flag:";
@@ -81,7 +82,6 @@
 				if(isFlag) {
 					flag = property.substr(5);
 					console.log("flag:", flag);
-					points.clear();
 				}
 
 
@@ -94,8 +94,10 @@
 						}
 					} else if(property.length !== 0) {
 						node.weight = node.relay_data[property];
+						points.push(node);
 					} else {
 						node.weight = 1;
+						points.push(node);
 					}
 				}
 				if(isFlag) {
