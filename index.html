@@ -1,43 +1,138 @@
 <html>
-<head>
-<title>TorMap - Jordan Wright (jmwright798 at gmail.com)</title>
-<script src="js/jquery.min.js"></script>
+	<head>
+		<title>TorMap - Jordan Wright (jmwright798 at gmail.com)</title>
+		<style>
+			html, body, #tor_map {
+				height: 100%;
+				margin: 0px;
+				padding: 0px;
+			}
+			#panel {
+				position: absolute;
+				top: 5px;
+				left: 50%;
+				margin-left: -180px;
+				z-index: 5;
+				background-color: #fff;
+				padding: 5px;
+				border: 1px solid #999;
+			}
+		</style>
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.js"></script>
+		<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAYzDfBzfP0Ex5LiJRaO_PEOw-B3BS2tsQ&v=3.exp&libraries=visualization"></script>
+		<script>
+			var points, origPoints, heatmap, flags;
+			function initialize() {
+				"use strict";
+				var map = new google.maps.Map(document.getElementById("tor_map"), {
+					center: new google.maps.LatLng(0, 0),
+					zoom: 2
+				});
+				points = new google.maps.MVCArray();
+				origPoints = new google.maps.MVCArray();
 
-<script src="js/jquery-jvectormap-1.2.2.min.js"></script>
-<script src="js/jquery-jvectormap-world-mill-en.js"></script>
-<link rel="stylesheet" media="all" href="css/jquery-jvectormap-1.2.2.css"/>
-</head>
-<body style="margin:0px;">
-<div style="height:100%;width:100%" id="tor_map"></div>
+				heatmap = new google.maps.visualization.HeatmapLayer({
+					data: points,
+					//dissipating: false,
+					map: map
+				});
 
-<script>
-$(function(){
-  $('#tor_map').vectorMap({
-    map: 'world_mill_en',
-    scaleColors: ['#C8EEFF', '#0071A4'],
-    normalizeFunction: 'polynomial',
-    hoverOpacity: 0.7,
-    hoverColor: false,
-    markerStyle: {
-      initial: {
-        fill: '#cc6600',
-        stroke: '#222222',
-        r: 2
-      }
-    },
-    backgroundColor: '#222222',
-    markers: [
-    ]
-  });
-  
-  map = $('#tor_map').vectorMap('get', 'mapObject');
-  $.getJSON('https://onionoo.torproject.org/details', function(data){
-		$.each(data.relays, function(idx, relay)
-		{
-			map.addMarker(relay.or_addresses[0], {'latLng' : [relay.latitude, relay.longitude], "name" : relay.or_addresses[0]});
-		});
-	});
-});
-</script>
-</body>
+				$.getJSON('https://onionoo.torproject.org/details', function(data) {
+					flags = {};
+					$.each(data.relays, function(_, relay)
+					{
+						//console.debug(relay);
+						if(relay.running && !isNaN(relay.latitude) && !isNaN(relay.longitude)) {
+							var node = {
+								relay_data: relay,
+								location: new google.maps.LatLng(relay.latitude, relay.longitude),
+								weight: 1
+							};
+							points.push(node);
+							origPoints.push(node);
+							$.each(relay.flags, function(_, flag) {
+								flags[flag] = true;
+							});
+						}
+					});
+
+					var flagList = [];
+					$.each(flags, function(flagName, _) {
+						flagList.push(flagName);
+					});
+					flagList.sort();
+					$.each(flagList, function(_, flagName) {
+						var option = $(document.createElement("option"));
+						option.val('flag:'+flagName);
+						option.text(flagName);
+						$("#flaglist").append(option);
+					});
+				});
+			}
+
+			function changeWeight(property) {
+				"use strict";
+
+				heatmap.setData([]);
+
+				var numNodes = origPoints.getLength();
+				var isFlag = property.substr(0, 5) == "flag:";
+				var flag;
+				if(isFlag) {
+					flag = property.substr(5);
+					console.log("flag:", flag);
+					points.clear();
+				}
+
+
+				for(var i = 0; i < numNodes; ++i) {
+					var node = origPoints.getAt(i);
+					if(isFlag) {
+						if($.inArray(flag, node.relay_data.flags) != -1) {
+							node.weight = 1;
+							points.push(node);
+						}
+					} else if(property.length !== 0) {
+						node.weight = node.relay_data[property];
+					} else {
+						node.weight = 1;
+					}
+				}
+				if(isFlag) {
+					console.log("Number of nodes with flag:", points.getLength());
+				}
+
+				heatmap.setData(points);
+			}
+
+			google.maps.event.addDomListener(window, 'load', initialize);
+		</script>
+	</head>
+	<body>
+		<div id="panel">
+			<select onchange="changeWeight(this.value)">
+				<optgroup label="Miscellaneous">
+					<option value="" selected>Node count</option>
+					<option value="consensus_weight">Consensus weight</option>
+				</optgroup>
+
+				<optgroup label="Flags" id="flaglist">
+				</optgroup>
+
+				<optgroup label="Bandwidth">
+					<option value="observed_bandwidth">Observed bandwidth</option>
+					<option value="advertised_bandwidth">Advertised bandwidth</option>
+					<option value="bandwidth_rate">Bandwidth limit</option>
+					<option value="bandwidth_burst">Bandwidth burst</option>
+				</optgroup>
+
+				<optgroup label="Probability of use">
+					<option value="guard_probability">Guard probability</option>
+					<option value="middle_probability">Middle probability</option>
+					<option value="exit_probability">Exit probability</option>
+				</optgroup>
+			</select>
+		</div>
+		<div id="tor_map"></div>
+	</body>
 </html>
